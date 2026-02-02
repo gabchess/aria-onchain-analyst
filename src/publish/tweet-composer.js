@@ -9,7 +9,8 @@ const BANNED_WORDS = [
   'cutting-edge', 'innovative', 'transformative', 'disruptive',
 ];
 
-const BANNED_EMOJI = ['🚀', '💎', '🌙', '📈'];
+// aixbt style: NO emoji at all
+const BANNED_EMOJI = ['🚀', '💎', '🌙', '📈', '🔥', '👀', '👁️', '🕵️', '😅', '🤯', '💝', '🧩', '♟️'];
 
 const MAX_LENGTH = 280;
 
@@ -31,6 +32,9 @@ export function composeTweet(insight) {
       text = text.replaceAll(emoji, '').trim();
     }
   }
+
+  // Force lowercase (aixbt style)
+  text = text.toLowerCase();
 
   // Truncate if too long
   if (text.length > MAX_LENGTH) {
