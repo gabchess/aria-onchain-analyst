@@ -39,7 +39,7 @@ DeFiLlama + Base RPC + Stablecoins
 ## Live Links
 
 - **X:** [@AriaLinkwell](https://x.com/AriaLinkwell)
-- **Contract:** [AnalyticsRegistry on Basescan](https://basescan.org/address/TBD)
+- **Contract:** [AnalyticsRegistry on Basescan](https://basescan.org/address/0x320346532e2D6f7061be590F3A3F4283ba2d8b8d)
 - **Wallet:** `0x4a0Ebb9A7815B1d93Df495f6313288DfE25fA753`
 
 ## Tech Stack
@@ -50,7 +50,7 @@ DeFiLlama + Base RPC + Stablecoins
 - **Analysis:** Gemini Flash via OpenRouter
 - **Tweeting:** Bird CLI (autonomous, no human review)
 - **Orchestration:** OpenClaw agent framework
-- **Video:** Remotion + HeyGen Avatar IV
+- **Video:** Remotion (programmatic video via Claude Code skill)
 
 ## Setup
 
@@ -66,10 +66,10 @@ node src/index.js         # Run one analysis cycle
 
 ## How It Works
 
-1. **Monitor** — Fetches Base TVL ($4.2B+), top protocols, gas prices, stablecoin supply
+1. **Monitor** — Fetches Base TVL ($5.4B+), top protocols, gas prices, stablecoin supply
 2. **Compare** — Loads previous snapshot, identifies changes
 3. **Analyze** — LLM examines data, finds the most interesting insight
-4. **Tweet** — Posts analysis in conversational style (no AI slop)
+4. **Tweet** — Posts analysis in aixbt-inspired style: all lowercase, data-driven, sharp opinions
 5. **Record** — Stores finding onchain with content hash for verifiability
 
 Runs every 4 hours, fully autonomous. No human in the loop.
