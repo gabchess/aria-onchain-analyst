@@ -1,161 +1,165 @@
 # Architecture — Aria Onchain Analyst
 
-## State Machine: Autonomous Loop
+## Design Philosophy
+
+**One job, done well.** Aria doesn't try to be a trading bot, a token deployer, or a social media manager. She monitors the Base ecosystem, finds what's interesting, and records it permanently. That's it.
+
+Every design decision optimizes for:
+1. **Reliability** — pipeline runs in ~11s, fails gracefully, retries on next cycle
+2. **Verifiability** — every finding has an onchain content hash anyone can audit
+3. **Cost efficiency** — all data sources free, LLM costs ~$0.001/run via Gemini Flash
+4. **Autonomy** — zero human intervention required for normal operation
+
+## System Overview
 
 ```
-                    ┌──────────────┐
-                    │    START     │
-                    └──────┬───────┘
-                           │
-                    ┌──────▼───────┐
-                    │   MONITOR    │── fail ──► LOG_ERROR ──► EXIT(1)
-                    │              │
-                    │ • DeFi TVL   │
-                    │ • Chain stats│
-                    │ • Stablecoins│
-                    └──────┬───────┘
-                           │ success (snapshot)
-                    ┌──────▼───────┐
-                    │   COMPARE    │
-                    │              │
-                    │ Load prev    │── no prev ──► Use current only
-                    │ snapshot     │
-                    └──────┬───────┘
-                           │
-                    ┌──────▼───────┐
-                    │   ANALYZE    │── fail ──► LOG_ERROR ──► EXIT(1)
-                    │              │
-                    │ LLM insight  │── confidence < 7 ──► LOG_SKIP ──► EXIT(0)
-                    │ generation   │
-                    └──────┬───────┘
-                           │ confidence >= 7
-                    ┌──────▼───────┐
-                    │   COMPOSE    │
-                    │              │
-                    │ Format tweet │── too long ──► TRUNCATE
-                    │ Check slop   │── slop found ──► REGENERATE (1x)
-                    └──────┬───────┘
-                           │
-                    ┌──────▼───────┐
-                    │    TWEET     │── fail ──► LOG_ERROR ──► SKIP_TWEET
-                    │              │               │
-                    │ Bird CLI     │               │ (still record onchain)
-                    └──────┬───────┘               │
-                           │ success (tweetUrl)    │
-                    ┌──────▼───────────────────────▼┐
-                    │   RECORD ONCHAIN              │── fail ──► LOG_ERROR ──► EXIT(1)
-                    │                               │
-                    │ AnalyticsRegistry.recordFinding│
-                    └──────┬────────────────────────┘
-                           │ success (txHash, findingId)
-                    ┌──────▼───────┐
-                    │     LOG      │
-                    │              │
-                    │ Save to      │
-                    │ runs.json    │
-                    │ findings.json│
-                    └──────┬───────┘
-                           │
-                    ┌──────▼───────┐
-                    │   EXIT(0)    │
-                    └──────────────┘
+                    ┌──────────────────┐
+                    │    OpenClaw      │
+                    │  Cron Scheduler  │
+                    │  (every 4 hours) │
+                    └────────┬─────────┘
+                             │ exec: run-pipeline.ps1
+                             ▼
+┌─────────────────────────────────────────────────────────┐
+│                     PIPELINE (src/index.js)              │
+│                                                          │
+│  ┌──────────┐   ┌──────────┐   ┌──────────────────────┐ │
+│  │ MONITOR  │──▶│ ANALYZE  │──▶│      PUBLISH         │ │
+│  │ (3 srcs) │   │ (LLM)   │   │ Tweet + Onchain      │ │
+│  └──────────┘   └──────────┘   └──────────────────────┘ │
+│                                                          │
+│  Total cycle: ~11s  ·  Logged to data/runs.json         │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ## Data Flow
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        DATA SOURCES                              │
-│                                                                  │
-│  DeFiLlama API          Base RPC            Stablecoins API     │
-│  (TVL, protocols)       (blocks, gas)       (USDC, USDT flows)  │
-└────────┬────────────────────┬─────────────────────┬─────────────┘
-         │                    │                     │
-         └────────────┬───────┴─────────────────────┘
-                      │
-              ┌───────▼────────┐
-              │   SNAPSHOT     │  JSON object with all data
-              │   BUILDER      │  + timestamp + prev snapshot
-              └───────┬────────┘
-                      │
-              ┌───────▼────────┐
-              │   LLM ANALYSIS │  Gemini Flash via OpenRouter
-              │                │  Prompt: "Find most interesting insight"
-              │   Input: both  │  Output: category, summary, analysis,
-              │   snapshots    │          tweetDraft, confidence
-              └───────┬────────┘
-                      │
-              ┌───────▼────────┐
-              │   TWEET        │  Bird CLI → @AriaLinkwell
-              │   COMPOSER     │  Validate: ≤280 chars, no slop
-              └───────┬────────┘
-                      │
-              ┌───────▼────────┐
-              │   ONCHAIN      │  ethers.js → AnalyticsRegistry
-              │   RECORDER     │  Store: category, summary, hash, URL
-              └───────┬────────┘
-                      │
-              ┌───────▼────────┐
-              │   OUTPUTS      │
-              │                │
-              │  • Tweet live on X          │
-              │  • Finding stored on Base   │
-              │  • Local log updated        │
-              └────────────────┘
-```
+### Stage 1: Monitor
 
-## API Endpoints Used
+Three parallel collectors run simultaneously:
 
-| API | Endpoint | Data | Auth |
-|-----|----------|------|------|
-| DeFiLlama | GET https://api.llama.fi/protocols | All protocols (filter Base) | None |
-| DeFiLlama | GET https://api.llama.fi/v2/chains | All chains TVL | None |
-| DeFiLlama | GET https://stablecoins.llama.fi/stablecoinchains | Stablecoin supply | None |
-| Base RPC | JSON-RPC https://mainnet.base.org | Blocks, gas, txs | None |
-| OpenRouter | POST https://openrouter.ai/api/v1/chat/completions | LLM analysis | API Key |
-| Bird CLI | CLI exec | Tweet posting | auth_token + ct0 |
-| Base Contract | AnalyticsRegistry.recordFinding() | Onchain storage | Wallet key |
+| Collector | Source | Data Points |
+|-----------|--------|-------------|
+| `defi-tvl.js` | DeFiLlama API | Total Base TVL, top 15 protocols by TVL, 24h changes |
+| `chain-stats.js` | Base RPC (`eth_*`) | Block height, gas price, transactions per block |
+| `stablecoin-flows.js` | DeFiLlama Stablecoins | Total supply, USDC/USDT/DAI breakdown, hourly change |
 
-## LLM Prompt Design
+All sources are **free, public APIs** requiring no authentication for read access.
 
-```
-System: You are a professional onchain data analyst specializing in Base L2.
-You analyze ecosystem data and identify the single most interesting insight.
-Your analysis style: conversational, data-driven, no hype. Like explaining
-to a smart friend over coffee.
+The monitor orchestrator (`src/monitor/index.js`):
+1. Runs all three collectors in parallel via `Promise.all`
+2. Saves the combined snapshot to `data/snapshots/`
+3. Loads the previous snapshot for comparison
+4. Returns `{ current, previous }` to the analyzer
 
-User: Here is the current Base ecosystem snapshot:
-{current_snapshot_json}
+### Stage 2: Analyze
 
-Previous snapshot (for comparison):
-{previous_snapshot_json}
+The insight generator (`src/analyze/insight-generator.js`) sends both snapshots to **Gemini 2.0 Flash** via OpenRouter with a carefully crafted system prompt:
 
-Analyze this data and return a JSON object:
-{
-  "category": "tvl|whale|trend|anomaly|bridge|protocol|stablecoin",
-  "summary": "One-line finding (< 100 chars)",
-  "fullAnalysis": "2-3 sentence detailed analysis",
-  "tweetDraft": "Ready-to-post tweet (< 280 chars, conversational style)",
-  "confidence": 1-10 (how interesting/noteworthy is this finding?)
+- **Style:** aixbt-inspired — lowercase, zero emoji, data-driven
+- **Output:** Structured JSON with `category`, `summary`, `fullAnalysis`, `tweetDraft`, `confidence` (1-10)
+- **Filter:** Only insights with confidence ≥ 7/10 proceed to publishing
+- **Cost:** ~$0.001 per analysis (Gemini Flash: $0.10/M input, $0.40/M output)
+
+The LLM is instructed to find the **single most noteworthy** data point — not summarize everything. This produces focused, specific tweets rather than generic market summaries.
+
+### Stage 3: Publish
+
+Three outputs, in order:
+
+1. **Tweet Composer** (`tweet-composer.js`)
+   - Enforces 280 char limit
+   - Filters banned words/patterns (from humanizer reference)
+   - Forces lowercase, strips emoji
+   - Validates against AI-slop patterns
+
+2. **Tweet Poster** (`bird-poster.js`)
+   - Primary: Bird CLI with @AriaLinkwell credentials
+   - Fallback: Saves to `data/pending-tweet.txt` for browser posting by cron agent
+   - Pipeline continues regardless of tweet success
+
+3. **Onchain Recorder** (`onchain-recorder.js`)
+   - Calls `AnalyticsRegistry.recordFinding()` on Base
+   - Stores: category, summary, `keccak256(fullAnalysis)`, tweet URL
+   - Emits `NewFinding` event
+   - Gas cost: ~125K gas (~$0.002 at current Base prices)
+
+## Smart Contract Design
+
+```solidity
+contract AnalyticsRegistry {
+    struct Finding {
+        uint256 timestamp;
+        string category;      // "defi", "chain", "stablecoin"
+        string summary;        // Human-readable summary
+        bytes32 contentHash;   // keccak256 of full analysis
+        string tweetUrl;       // Link to published tweet
+    }
+
+    address public immutable analyst;  // Only deployer can record
+    Finding[] public findings;
+
+    event NewFinding(uint256 indexed id, string category, string summary, bytes32 contentHash);
 }
-
-Rules for tweetDraft:
-- Conversational tone (lowercase ok, fragments ok)
-- Must include at least one specific number/metric
-- No AI slop (no "🚀", "game changer", "landscape", "revolutionize")
-- No generic questions ("what do you think?")
-- Natural transitions ("so basically...", "ok this is interesting...")
 ```
 
-## Gas Budget
-- Wallet: 0.01 ETH on Base
-- Gas per recordFinding: ~100k gas × 0.015 gwei = ~0.0000015 ETH
-- Budget for ~6,500 recordings (way more than needed)
-- Deploy cost: ~500k gas = ~0.0000075 ETH
+**Why onchain?**
+- Immutable record of every analysis — can't be edited or deleted
+- Content hash allows verification: hash the full analysis text, compare to onchain hash
+- Anyone can query the contract to see Aria's track record
+- Demonstrates real Base usage, not just a deployed contract sitting idle
 
-## Error Handling Strategy
-- **API failures:** Retry once with 2s delay, then skip with warning
-- **LLM failures:** Log and exit (don't publish garbage)
-- **Tweet failures:** Log but still record onchain (finding is still valid)
-- **Tx failures:** Log with full error, check nonce, retry once
-- **All errors:** Write to data/errors.json for debugging
+**Why a single `analyst` modifier?**
+- Aria is the sole analyst — this prevents spam or unauthorized recordings
+- Simple is better. No governance, no tokens, no complexity.
+
+## Cron Architecture
+
+```
+OpenClaw Gateway
+  └── Cron Job (every 4 hours)
+       ├── Model: Gemini 2.0 Flash
+       ├── Session: isolated
+       └── Steps:
+            1. exec: powershell run-pipeline.ps1
+            2. Check output for PENDING_TWEET marker
+            3. If pending: browser → x.com/compose → type → post
+            4. Report summary (auto-delivered to Telegram)
+```
+
+The cron agent is a lightweight Gemini Flash session that:
+- Runs the pipeline (Node.js handles all data work)
+- Handles browser-based tweet posting when Bird CLI is blocked
+- Reports results to Gabe via Telegram
+
+## Error Handling
+
+| Failure | Behavior |
+|---------|----------|
+| Data source down | Pipeline continues with available sources (2/3 is OK) |
+| LLM returns low confidence | Run marked "skipped", no tweet or recording |
+| Bird CLI blocked (error 226) | Tweet saved to pending file, cron posts via browser |
+| Browser posting fails | Tweet text in output for manual posting |
+| Onchain TX fails | Logged in runs.json, retries next cycle |
+| Entire pipeline crashes | Exit code 1, cron reports error |
+
+**Design principle:** Never lose data. Even if publishing fails, the insight is saved locally and the onchain recording still attempts independently.
+
+## Cost Analysis
+
+| Resource | Cost | Frequency |
+|----------|------|-----------|
+| Gemini Flash (analysis) | ~$0.001/run | 6x/day |
+| Base gas (recording) | ~$0.002/run | 6x/day |
+| DeFiLlama API | Free | 6x/day |
+| Base RPC | Free | 6x/day |
+| OpenClaw cron | Included | — |
+| **Total** | **~$0.50/month** | |
+
+## Security Considerations
+
+- Private key stored in `.env` (gitignored, never committed)
+- No admin functions on contract beyond `recordFinding`
+- Bird CLI credentials use browser profile auth (no tokens in env)
+- Cron clears auth env vars to prevent cross-account posting
+- All API calls are read-only (no write access to external systems)
