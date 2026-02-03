@@ -7,7 +7,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { collectSnapshot } from './monitor/index.js';
 import { analyzeSnapshot } from './analyze/index.js';
 import { composeTweet } from './publish/tweet-composer.js';
-import { postTweet } from './publish/browser-poster.js';
+import { postTweet } from './publish/twitter-api-poster.js';
 import { generateChart } from './publish/chart-generator.js';
 import { recordOnchain } from './publish/onchain-recorder.js';
 
