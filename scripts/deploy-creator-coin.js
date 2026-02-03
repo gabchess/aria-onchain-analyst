@@ -4,7 +4,7 @@
  * This is a one-time deployment that creates Aria's profile-level token.
  * After this, content coins (per-analysis) will be backed by this creator coin.
  */
-import { createCoin, createCoinCall, CreateConstants, createMetadataBuilder, createZoraUploaderForCreator } from '@zoralabs/coins-sdk';
+import { createCoin, createCoinCall, CreateConstants } from '@zoralabs/coins-sdk';
 import { createWalletClient, createPublicClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { base } from 'viem/chains';
@@ -45,43 +45,35 @@ async function deployCreatorCoin() {
     process.exit(1);
   }
 
-  // Step 1: Build metadata and upload to IPFS via Zora
-  console.log('\n📝 Building metadata and uploading to IPFS...');
-
-  const { createMetadataParameters } = await createMetadataBuilder()
-    .withName('Aria Linkwell')
-    .withSymbol('ARIA')
-    .withDescription('Autonomous onchain data analyst on Base. AI-powered analysis of DeFi, gas, and ecosystem trends. Every top analysis becomes a tradeable content coin. Quality over quantity. Built for Base Builder Quest.')
-    .upload(createZoraUploaderForCreator(account.address));
-
-  console.log('Metadata uploaded! Params:', JSON.stringify(createMetadataParameters, null, 2));
+  // Metadata hosted on GitHub (raw URL)
+  const metadataUri = 'https://raw.githubusercontent.com/gabchess/aria-onchain-analyst/master/data/creator-coin-metadata.json';
+  console.log(`\n📝 Metadata URI: ${metadataUri}`);
 
   // Step 2: Get calldata from Zora API
   console.log('\n📦 Getting deployment calldata...');
 
-  const callResult = await createCoinCall({
+  const coinArgs = {
     creator: account.address,
-    ...createMetadataParameters,
+    name: 'Aria Linkwell',
+    symbol: 'ARIA',
+    metadata: { type: 'RAW_URI', uri: metadataUri },
     currency: CreateConstants.ContentCoinCurrencies.ETH,
     chainId: base.id,
     startingMarketCap: CreateConstants.StartingMarketCaps.LOW,
-  });
+    skipMetadataValidation: true,
+  };
+
+  console.log('\n📦 Getting deployment calldata...');
+  const callResult = await createCoinCall(coinArgs);
 
   console.log(`\n📍 Predicted coin address: ${callResult.predictedCoinAddress}`);
   console.log(`📝 Transaction target: ${callResult.calls[0].to}`);
   console.log(`💰 Value: ${callResult.calls[0].value} wei`);
 
-  // Step 3: Deploy!
   console.log('\n🚀 Sending transaction...');
 
   const result = await createCoin({
-    call: {
-      creator: account.address,
-      ...createMetadataParameters,
-      currency: CreateConstants.ContentCoinCurrencies.ETH,
-      chainId: base.id,
-      startingMarketCap: CreateConstants.StartingMarketCaps.LOW,
-    },
+    call: coinArgs,
     walletClient,
     publicClient,
   });
