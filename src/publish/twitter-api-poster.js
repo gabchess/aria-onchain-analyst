@@ -91,9 +91,10 @@ async function uploadMedia(filePath) {
  * Post a tweet via X API v2
  * @param {string} text - Tweet text (max 280 chars)
  * @param {string|null} mediaPath - Optional path to image file
+ * @param {string|null} replyToId - Optional tweet ID to reply to (for threads)
  * @returns {Promise<{success: boolean, tweetId?: string, tweetUrl?: string, method: string, error?: string}>}
  */
-export async function postTweet(text, mediaPath = null) {
+export async function postTweet(text, mediaPath = null, replyToId = null) {
   console.log(`🐦 Posting tweet via X API v2 (${text.length} chars)${mediaPath ? ' + image' : ''}...`);
 
   if (!keys.apiKey || !keys.accessToken) {
@@ -118,6 +119,9 @@ export async function postTweet(text, mediaPath = null) {
     const payload = { text };
     if (mediaId) {
       payload.media = { media_ids: [mediaId] };
+    }
+    if (replyToId) {
+      payload.reply = { in_reply_to_tweet_id: replyToId };
     }
 
     const requestData = { url: tweetUrl, method: 'POST' };
