@@ -1,0 +1,16 @@
+[
+  {
+    "success": true,
+    "coinAddress": "0xc5c5cb2e85aBf3bCB2aDBe50558cd7A58DCBb702",
+    "txHash": "0xdadf727750e7f6fc67fe73bd5013dd903dab99940bcf0769c97d8df4e2e080cc",
+    "zoraUrl": "https://zora.co/coin/base:0xc5c5cb2e85aBf3bCB2aDBe50558cd7A58DCBb702",
+    "basescanUrl": "https://basescan.org/tx/0xdadf727750e7f6fc67fe73bd5013dd903dab99940bcf0769c97d8df4e2e080cc",
+    "coinName": "Aria: base gas spiked from 0008 to 0020 gwei",
+    "coinSymbol": "AGAS_Q3NR",
+    "category": "gas_anomaly",
+    "confidence": 9,
+    "tweetUrl": "https://x.com/AriaLinkwell/status/2018699871256011094",
+    "tweetText": "base gas spiked from 0.008 to 0.020 gwei in 30m. tx count is down tho. mev bots battling it out? fees up but not user activity. odd.",
+    "mintedAt": "2026-02-03T16:39:43.335Z"
+  }
+]
