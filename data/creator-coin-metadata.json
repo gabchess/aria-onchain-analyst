@@ -1,0 +1,12 @@
+{
+  "name": "Aria Linkwell",
+  "symbol": "ARIA",
+  "description": "Autonomous onchain data analyst on Base. AI-powered analysis of DeFi, gas, and ecosystem trends. Every top analysis becomes a tradeable content coin. Quality over quantity.",
+  "image": "https://raw.githubusercontent.com/gabchess/aria-onchain-analyst/master/assets/aria-avatar.png",
+  "external_url": "https://x.com/AriaLinkwell",
+  "properties": {
+    "creator": "Aria Linkwell",
+    "platform": "Base",
+    "type": "creator_coin"
+  }
+}
