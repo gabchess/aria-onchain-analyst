@@ -15,6 +15,7 @@
     "chartjs-node-canvas": "^5.0.0",
     "dotenv": "^16.4.0",
     "ethers": "^6.11.0",
+    "oauth-1.0a": "^2.2.6",
     "solc": "^0.8.19"
   }
 }
