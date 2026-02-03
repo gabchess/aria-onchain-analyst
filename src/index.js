@@ -8,6 +8,7 @@ import { collectSnapshot } from './monitor/index.js';
 import { analyzeSnapshot } from './analyze/index.js';
 import { composeTweet } from './publish/tweet-composer.js';
 import { postTweet } from './publish/bird-poster.js';
+import { generateChart } from './publish/chart-generator.js';
 import { recordOnchain } from './publish/onchain-recorder.js';
 
 const DATA_DIR = new URL('../data/', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1');
@@ -67,11 +68,21 @@ async function main() {
     const tweetText = composeTweet(insight);
     run.steps.compose = { success: true, length: tweetText.length };
 
-    // Step 4: Post tweet
+    // Step 3.5: Generate chart image if possible
+    let chartPath = null;
+    try {
+      chartPath = await generateChart(current, insight);
+      run.steps.chart = { success: !!chartPath, path: chartPath };
+    } catch (err) {
+      console.log(`📊 Chart generation skipped: ${err.message}`);
+      run.steps.chart = { success: false, error: err.message };
+    }
+
+    // Step 4: Post tweet (with chart if available)
     // NOTE: OpenClaw browser (openclaw profile) must be stopped before running
     // this script, so Bird CLI can access cookie DB for @AriaLinkwell.
     // The cron/wrapper script should handle browser stop/start.
-    const tweetResult = postTweet(tweetText);
+    const tweetResult = postTweet(tweetText, chartPath);
     run.steps.tweet = tweetResult;
     insight.tweetUrl = tweetResult.tweetUrl || '';
 

@@ -13,12 +13,15 @@ import { execSync } from 'child_process';
 const PENDING_TWEET_PATH = new URL('../../data/pending-tweet.txt', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1');
 const CHROME_PROFILE = 'C:\\Users\\gavaf\\.openclaw\\browser\\openclaw\\user-data\\Default';
 
-export function postTweet(text) {
-  console.log(`🐦 Posting tweet (${text.length} chars)...`);
+export function postTweet(text, mediaPath = null) {
+  console.log(`🐦 Posting tweet (${text.length} chars)${mediaPath ? ' + chart image' : ''}...`);
+
+  // Build media flag
+  const mediaFlag = mediaPath ? ` --media "${mediaPath}"` : '';
 
   // Try Bird CLI first (may work once error 226 cooldown expires)
   try {
-    const output = execSync(`bird tweet "${esc(text)}" --chrome-profile-dir "${CHROME_PROFILE}"`, {
+    const output = execSync(`bird tweet "${esc(text)}"${mediaFlag} --chrome-profile-dir "${CHROME_PROFILE}"`, {
       encoding: 'utf8',
       timeout: 15000,
       env: { ...process.env, AUTH_TOKEN: '', CT0: '' },

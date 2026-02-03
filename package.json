@@ -11,6 +11,8 @@
   "author": "Aria Linkwell <arialinkwell@gmail.com>",
   "license": "MIT",
   "dependencies": {
+    "chart.js": "^4.5.1",
+    "chartjs-node-canvas": "^5.0.0",
     "dotenv": "^16.4.0",
     "ethers": "^6.11.0",
     "solc": "^0.8.19"
